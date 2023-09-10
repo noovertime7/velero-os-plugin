@@ -18,6 +18,8 @@ package plugin
 
 import (
 	"errors"
+	"github.com/vmware-tanzu/velero-plugin-example/internal/plugin/uploader"
+	veleroplugin "github.com/vmware-tanzu/velero/pkg/plugin/framework"
 	"io"
 	"io/ioutil"
 	"os"
@@ -28,8 +30,30 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type FileObjectStore struct {
-	log logrus.FieldLogger
+const (
+	regionKey                    = "region"
+	s3URLKey                     = "s3Url"
+	publicURLKey                 = "publicUrl"
+	kmsKeyIDKey                  = "kmsKeyId"
+	customerKeyEncryptionFileKey = "customerKeyEncryptionFile"
+	s3ForcePathStyleKey          = "s3ForcePathStyle"
+	bucketKey                    = "bucket"
+	signatureVersionKey          = "signatureVersion"
+	credentialsFileKey           = "credentialsFile"
+	credentialProfileKey         = "profile"
+	serverSideEncryptionKey      = "serverSideEncryption"
+	insecureSkipTLSVerifyKey     = "insecureSkipTLSVerify"
+	caCertKey                    = "caCert"
+	enableSharedConfigKey        = "enableSharedConfig"
+)
+
+type ObjectStore struct {
+	log      logrus.FieldLogger
+	uploader uploader.Uploader
+}
+
+func newObjectStore(logger logrus.FieldLogger) *ObjectStore {
+	return &ObjectStore{log: logger}
 }
 
 // NewFileObjectStore instantiates a FileObjectStore.
@@ -38,11 +62,51 @@ func NewFileObjectStore(log logrus.FieldLogger) *FileObjectStore {
 }
 
 // Init initializes the plugin. After v0.10.0, this can be called multiple times.
-func (f *FileObjectStore) Init(config map[string]string) error {
+func (f *ObjectStore) Init(config map[string]string) error {
 	f.log.Infof("FileObjectStore.Init called")
 
-	path := filepath.Join(getRoot(), config["bucket"], config["prefix"])
-	return os.MkdirAll(path, 0755)
+	if err := veleroplugin.ValidateObjectStoreConfigKeys(config,
+		regionKey,
+		s3URLKey,
+		publicURLKey,
+		kmsKeyIDKey,
+		customerKeyEncryptionFileKey,
+		s3ForcePathStyleKey,
+		signatureVersionKey,
+		credentialsFileKey,
+		credentialProfileKey,
+		serverSideEncryptionKey,
+		insecureSkipTLSVerifyKey,
+		enableSharedConfigKey,
+	); err != nil {
+		return err
+	}
+
+	var (
+		region                    = config[regionKey]
+		s3URL                     = config[s3URLKey]
+		publicURL                 = config[publicURLKey]
+		kmsKeyID                  = config[kmsKeyIDKey]
+		customerKeyEncryptionFile = config[customerKeyEncryptionFileKey]
+		s3ForcePathStyleVal       = config[s3ForcePathStyleKey]
+		signatureVersion          = config[signatureVersionKey]
+		credentialProfile         = config[credentialProfileKey]
+		credentialsFile           = config[credentialsFileKey]
+		serverSideEncryption      = config[serverSideEncryptionKey]
+		insecureSkipTLSVerifyVal  = config[insecureSkipTLSVerifyKey]
+		enableSharedConfig        = config[enableSharedConfigKey]
+
+		// note that bucket is automatically added to the config map
+		// by the server from the ObjectStorageProviderConfig so
+		// doesn't need to be explicitly set by the user within
+		// config.
+		bucket                = config[bucketKey]
+		caCert                = config[caCertKey]
+		s3ForcePathStyle      bool
+		insecureSkipTLSVerify bool
+		err                   error
+	)
+
 }
 
 func (f *FileObjectStore) PutObject(bucket string, key string, body io.Reader) error {
