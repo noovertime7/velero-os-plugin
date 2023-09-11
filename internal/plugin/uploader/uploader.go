@@ -1,6 +1,9 @@
 package uploader
 
-import "io"
+import (
+	"io"
+	"time"
+)
 
 type Uploader interface {
 	PutObject(bucket string, key string, body io.Reader) error
@@ -8,4 +11,6 @@ type Uploader interface {
 	GetObject(bucket, key string) (io.ReadCloser, error)
 	ListObjects(bucket, prefix string) ([]string, error)
 	DeleteObject(bucket, key string) error
+	ListCommonPrefixes(bucket, prefix, delimiter string) ([]string, error)
+	CreateSignedURL(bucketName, key string, ttl time.Duration) (string, error)
 }

@@ -1,0 +1,1 @@
+harbor-tj.ts-it.cn/monitor/cloud-os-plugin:v1.0.4-fix1

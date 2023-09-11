@@ -17,34 +17,29 @@ limitations under the License.
 package plugin
 
 import (
-	"errors"
+	"fmt"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/pkg/errors"
+	"github.com/vmware-tanzu/velero-plugin-example/internal/ini"
 	"github.com/vmware-tanzu/velero-plugin-example/internal/plugin/uploader"
 	veleroplugin "github.com/vmware-tanzu/velero/pkg/plugin/framework"
 	"io"
-	"io/ioutil"
 	"os"
-	"path/filepath"
-	"strings"
+	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	regionKey                    = "region"
-	s3URLKey                     = "s3Url"
-	publicURLKey                 = "publicUrl"
-	kmsKeyIDKey                  = "kmsKeyId"
-	customerKeyEncryptionFileKey = "customerKeyEncryptionFile"
-	s3ForcePathStyleKey          = "s3ForcePathStyle"
-	bucketKey                    = "bucket"
-	signatureVersionKey          = "signatureVersion"
-	credentialsFileKey           = "credentialsFile"
-	credentialProfileKey         = "profile"
-	serverSideEncryptionKey      = "serverSideEncryption"
-	insecureSkipTLSVerifyKey     = "insecureSkipTLSVerify"
-	caCertKey                    = "caCert"
-	enableSharedConfigKey        = "enableSharedConfig"
+	s3TypeKey                = "s3Type"
+	regionKey                = "region"
+	s3URLKey                 = "s3Url"
+	insecureSkipTLSVerifyKey = "insecureSkipTLSVerify"
+	s3ForcePathStyleKey      = "s3ForcePathStyle"
+	bucketKey                = "bucket"
+	credentialsFileKey       = "credentialsFile"
+	credentialProfileKey     = "profile"
 )
 
 type ObjectStore struct {
@@ -52,228 +47,163 @@ type ObjectStore struct {
 	uploader uploader.Uploader
 }
 
-func newObjectStore(logger logrus.FieldLogger) *ObjectStore {
+func NewObjectStore(logger logrus.FieldLogger) *ObjectStore {
 	return &ObjectStore{log: logger}
-}
-
-// NewFileObjectStore instantiates a FileObjectStore.
-func NewFileObjectStore(log logrus.FieldLogger) *FileObjectStore {
-	return &FileObjectStore{log: log}
 }
 
 // Init initializes the plugin. After v0.10.0, this can be called multiple times.
 func (f *ObjectStore) Init(config map[string]string) error {
-	f.log.Infof("FileObjectStore.Init called")
-
+	f.log.Infof("Init called")
+	f.log.Debugf("config:[%v]", config)
 	if err := veleroplugin.ValidateObjectStoreConfigKeys(config,
 		regionKey,
 		s3URLKey,
-		publicURLKey,
-		kmsKeyIDKey,
-		customerKeyEncryptionFileKey,
+		s3TypeKey,
 		s3ForcePathStyleKey,
-		signatureVersionKey,
 		credentialsFileKey,
 		credentialProfileKey,
-		serverSideEncryptionKey,
 		insecureSkipTLSVerifyKey,
-		enableSharedConfigKey,
 	); err != nil {
 		return err
 	}
 
 	var (
-		region                    = config[regionKey]
-		s3URL                     = config[s3URLKey]
-		publicURL                 = config[publicURLKey]
-		kmsKeyID                  = config[kmsKeyIDKey]
-		customerKeyEncryptionFile = config[customerKeyEncryptionFileKey]
-		s3ForcePathStyleVal       = config[s3ForcePathStyleKey]
-		signatureVersion          = config[signatureVersionKey]
-		credentialProfile         = config[credentialProfileKey]
-		credentialsFile           = config[credentialsFileKey]
-		serverSideEncryption      = config[serverSideEncryptionKey]
-		insecureSkipTLSVerifyVal  = config[insecureSkipTLSVerifyKey]
-		enableSharedConfig        = config[enableSharedConfigKey]
-
-		// note that bucket is automatically added to the config map
-		// by the server from the ObjectStorageProviderConfig so
-		// doesn't need to be explicitly set by the user within
-		// config.
-		bucket                = config[bucketKey]
-		caCert                = config[caCertKey]
-		s3ForcePathStyle      bool
-		insecureSkipTLSVerify bool
-		err                   error
+		region                   = config[regionKey]
+		s3URL                    = config[s3URLKey]
+		s3Type                   = config[s3TypeKey]
+		insecureSkipTLSVerifyVal = config[insecureSkipTLSVerifyKey]
+		s3ForcePathStyleVal      = config[s3ForcePathStyleKey]
+		credentialProfile        = config[credentialProfileKey]
+		credentialsFile          = config[credentialsFileKey]
+		bucket                   = config[bucketKey]
+		s3ForcePathStyle         bool
+		insecureSkipTLSVerify    bool
+		err                      error
 	)
+	f.log.Info("bucket", bucket)
 
-}
-
-func (f *FileObjectStore) PutObject(bucket string, key string, body io.Reader) error {
-	path := filepath.Join(getRoot(), bucket, key)
-
-	log := f.log.WithFields(logrus.Fields{
-		"bucket": bucket,
-		"key":    key,
-		"path":   path,
-	})
-	log.Infof("PutObject")
-
-	dir := filepath.Dir(path)
-	log.Infof("Creating dir %s", dir)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
-	}
-
-	log.Infof("Creating file")
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	log.Infof("Writing to file")
-	_, err = io.Copy(file, body)
-
-	log.Infof("Done")
-	return err
-}
-
-func (f *FileObjectStore) ObjectExists(bucket, key string) (bool, error) {
-	path := filepath.Join(getRoot(), bucket, key)
-
-	log := f.log.WithFields(logrus.Fields{
-		"bucket": bucket,
-		"key":    key,
-		"path":   path,
-	})
-	log.Infof("ObjectExists")
-
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-
-	return true, err
-}
-
-func (f *FileObjectStore) GetObject(bucket, key string) (io.ReadCloser, error) {
-	path := filepath.Join(getRoot(), bucket, key)
-
-	log := f.log.WithFields(logrus.Fields{
-		"bucket": bucket,
-		"key":    key,
-		"path":   path,
-	})
-	log.Infof("GetObject")
-
-	return os.Open(path)
-}
-
-func (f *FileObjectStore) ListCommonPrefixes(bucket, prefix, delimiter string) ([]string, error) {
-	path := filepath.Join(getRoot(), bucket, prefix, delimiter)
-
-	log := f.log.WithFields(logrus.Fields{
-		"bucket":    bucket,
-		"delimiter": delimiter,
-		"path":      path,
-		"prefix":    prefix,
-	})
-	log.Infof("ListCommonPrefixes")
-
-	infos, err := ioutil.ReadDir(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var dirs []string
-	for _, info := range infos {
-		if info.IsDir() {
-			dirs = append(dirs, info.Name())
+	if insecureSkipTLSVerifyVal != "" {
+		if insecureSkipTLSVerify, err = strconv.ParseBool(insecureSkipTLSVerifyVal); err != nil {
+			return errors.Wrapf(err, "could not parse %s (expected bool)", insecureSkipTLSVerifyKey)
 		}
 	}
 
-	return dirs, nil
-}
+	if s3ForcePathStyleVal != "" {
+		if s3ForcePathStyle, err = strconv.ParseBool(s3ForcePathStyleVal); err != nil {
+			return errors.Wrapf(err, "could not parse %s (expected bool)", s3ForcePathStyleKey)
+		}
+	}
 
-func (f *FileObjectStore) ListObjects(bucket, prefix string) ([]string, error) {
-	path := filepath.Join(getRoot(), bucket, prefix)
-
-	log := f.log.WithFields(logrus.Fields{
-		"bucket": bucket,
-		"prefix": prefix,
-		"path":   path,
-	})
-	log.Infof("ListObjects")
-
-	infos, err := ioutil.ReadDir(path)
+	access, secret, err := f.getAccessAndSecret(credentialsFile, credentialProfile)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var objects []string
-	for _, info := range infos {
-		objects = append(objects, filepath.Join(prefix, info.Name()))
-	}
-
-	return objects, nil
-}
-
-func (f *FileObjectStore) DeleteObject(bucket, key string) error {
-	path := filepath.Join(getRoot(), bucket, key)
-
-	log := f.log.WithFields(logrus.Fields{
-		"bucket": bucket,
-		"key":    key,
-		"path":   path,
-	})
-	log.Infof("DeleteObject")
-
-	err := os.Remove(path)
-
-	// This logic is specific to a file system; we need to clean up the backup directory
-	// if there's nothing left. "Normal" object stores only mimic directory structures and don't need this.
-	keyParts := strings.Split(key, "/")
-	var backupPath string
-	if len(keyParts) > 1 {
-		backupPath = filepath.Join(getRoot(), bucket, keyParts[0], keyParts[1])
-	}
-	if backupPath != "" {
-		infos, err := ioutil.ReadDir(backupPath)
+	switch s3Type {
+	case "minio":
+		f.uploader, err = uploader.NewMinioUploader(s3URL, access, secret, insecureSkipTLSVerify, region, f.log)
 		if err != nil {
-			return err
+			return fmt.Errorf("init minio uploader error: %w", err)
 		}
-		if len(infos) == 0 {
-			l := f.log.WithFields(logrus.Fields{
-				"backupPath": backupPath,
-			})
-			l.Infof("Deleted backup directory")
-			os.Remove(backupPath)
+	case "oss":
+		f.uploader, err = uploader.NewOSSUploader(s3URL, access, secret, region, s3ForcePathStyle, f.log)
+		if err != nil {
+			return fmt.Errorf("init oss uploader error: %w", err)
 		}
+	default:
+		return fmt.Errorf("unsurport s3 Type")
 	}
 
-	return err
+	f.log.Debugf("build os-plugin uploader success,uploader type: [%s]", s3Type)
+
+	return nil
 }
 
-func (f *FileObjectStore) CreateSignedURL(bucket, key string, ttl time.Duration) (string, error) {
+func (f *ObjectStore) getAccessAndSecret(credentialsFile, profile string) (string, string, error) {
+	if len(profile) == 0 {
+		profile = DefaultSharedConfigProfile
+	}
+
+	if credentialsFile != "" {
+		if _, err := os.Stat(credentialsFile); err != nil {
+			if os.IsNotExist(err) {
+				return "", "", errors.Wrapf(err, "provided credentialsFile does not exist")
+			}
+			return "", "", errors.Wrapf(err, "could not get credentialsFile info")
+		}
+
+		//	从给出的配置文件路径中读取用户名密码
+		f.log.Infof("从给出的配置中读取密钥: [%s] [%s]", credentialsFile, profile)
+		access, secret, err := f.readCredentialsFile(credentialsFile, profile)
+		if err != nil {
+			return "", "", err
+		}
+		return access, secret, nil
+	}
+	f.log.Infof("从默认配置中读取密钥: [%s] [%s]", DefaultCredentialsFile, profile)
+	return f.readCredentialsFile(DefaultCredentialsFile, profile)
+}
+
+func (f *ObjectStore) readCredentialsFile(CredentialsFile, profile string) (string, string, error) {
+	f.log.Infof("read CredentialsFile from: %s", CredentialsFile)
+	config, err := ini.OpenFile(CredentialsFile)
+	if err != nil {
+		return "", "", fmt.Errorf("read from %s error", DefaultCredentialsFile)
+	}
+	iniProfile, ok := config.GetSection(profile)
+	if !ok {
+		return "", "", awserr.New("SharedCredsLoad", "failed to get profile", nil)
+	}
+
+	id := iniProfile.String(accessKeyIDKey)
+	if len(id) == 0 {
+		return "", "", fmt.Errorf("get aws_access_key_id empty :%v", id)
+	}
+
+	secret := iniProfile.String(secretAccessKey)
+	if len(secret) == 0 {
+		return "", "", fmt.Errorf("get aws_secret_access_key empty :%v", id)
+	}
+
+	return id, secret, nil
+}
+
+func (f *ObjectStore) PutObject(bucket string, key string, body io.Reader) error {
+	f.log.Infof("PutObject  [%s/%s]", bucket, key)
+	return f.uploader.PutObject(bucket, key, body)
+}
+
+func (f *ObjectStore) ObjectExists(bucket, key string) (bool, error) {
+	f.log.Infof("check object exists  [%s/%s]", bucket, key)
+	return f.uploader.ObjectExists(bucket, key)
+}
+
+func (f *ObjectStore) GetObject(bucket, key string) (io.ReadCloser, error) {
+	f.log.Infof("get object [%s/%s]", bucket, key)
+	return f.uploader.GetObject(bucket, key)
+}
+
+func (f *ObjectStore) ListCommonPrefixes(bucket, prefix, delimiter string) ([]string, error) {
+	f.log.Infof("ListCommonPrefixes object [%s/%s/%s]", bucket, prefix, delimiter)
+	return f.uploader.ListCommonPrefixes(bucket, prefix, delimiter)
+}
+
+func (f *ObjectStore) ListObjects(bucket, prefix string) ([]string, error) {
+	f.log.Infof("list object [%s/%s]", bucket, prefix)
+	return f.uploader.ListObjects(bucket, prefix)
+}
+
+func (f *ObjectStore) DeleteObject(bucket, key string) error {
+	f.log.Infof("delete object [%s/%s]", bucket, key)
+	return f.uploader.DeleteObject(bucket, key)
+}
+
+func (f *ObjectStore) CreateSignedURL(bucket, key string, ttl time.Duration) (string, error) {
 	log := f.log.WithFields(logrus.Fields{
 		"bucket": bucket,
 		"key":    key,
+		"ttl":    ttl,
 	})
 	log.Infof("CreateSignedURL")
-	return "", errors.New("CreateSignedURL is not supported for this plugin")
-}
-
-const defaultRoot = "/tmp/backups"
-
-func getRoot() string {
-	root := os.Getenv("ARK_FILE_OBJECT_STORE_ROOT")
-	if root != "" {
-		return root
-	}
-
-	return defaultRoot
+	return f.uploader.CreateSignedURL(bucket, key, ttl)
 }

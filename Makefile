@@ -17,7 +17,8 @@ BIN := velero-plugin-example
 
 REGISTRY ?= velero
 IMAGE    ?= $(REGISTRY)/velero-plugin-example
-VERSION  ?= main 
+VERSION  ?= main
+Image=$(shell cat ./image.txt)
 
 GOOS   ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
@@ -27,7 +28,7 @@ GOARCH ?= $(shell go env GOARCH)
 local: build-dirs
 	CGO_ENABLED=0 go build -v -o _output/bin/$(GOOS)/$(GOARCH) .
 
-# test runs unit tests using 'go test' in the local environment.
+# testdata runs unit tests using 'go testdata' in the local environment.
 .PHONY: test
 test:
 	CGO_ENABLED=0 go test -v -timeout 60s ./...
@@ -72,3 +73,14 @@ build-dirs:
 clean:
 	@echo "cleaning"
 	rm -rf _output
+
+.PHONY: build
+# build
+build:
+	docker build -t ${Image} . 	--platform=linux/amd64
+
+.PHONY: buildPush
+# build and push
+buildPush:
+	make build
+	docker push ${Image}
