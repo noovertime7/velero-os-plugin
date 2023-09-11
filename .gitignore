@@ -5,4 +5,4 @@ velero-plugin-example
 
 _tiltbuild
 
-internal/testdata
+internal/testdata/*.go
