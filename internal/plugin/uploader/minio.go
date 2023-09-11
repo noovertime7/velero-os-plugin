@@ -15,6 +15,7 @@ import (
 // MinioUploader 实现了 Uploader 接口
 type MinioUploader struct {
 	client *minio.Client
+	core   *minio.Core
 	logger logrus.FieldLogger
 }
 
@@ -31,7 +32,7 @@ func NewMinioUploader(endpoint, accessKey, secretKey string, useSSL bool, region
 		endpoint = strings.TrimPrefix(endpoint, "https://")
 	}
 	// 创建 Minio 客户端
-	minioClient, err := minio.New(endpoint, &minio.Options{
+	minioCore, err := minio.NewCore(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: useSSL,
 		Region: region,
@@ -41,13 +42,14 @@ func NewMinioUploader(endpoint, accessKey, secretKey string, useSSL bool, region
 	}
 
 	logger.Info("build minio uploader success")
-	return &MinioUploader{client: minioClient, logger: logger}, nil
+	return &MinioUploader{client: minioCore.Client, core: minioCore, logger: logger}, nil
 }
 
 // PutObject 将数据上传到指定的桶和键中
 func (m *MinioUploader) PutObject(bucket, key string, body io.Reader) error {
-	m.logger.Debugf("upload object [%s/%s]", bucket, key)
-	_, err := m.client.PutObject(context.Background(), bucket, key, body, -1, minio.PutObjectOptions{})
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_, err := m.client.PutObject(ctx, bucket, key, body, -1, minio.PutObjectOptions{})
 	return err
 }
 

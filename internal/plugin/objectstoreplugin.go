@@ -170,7 +170,13 @@ func (f *ObjectStore) readCredentialsFile(CredentialsFile, profile string) (stri
 
 func (f *ObjectStore) PutObject(bucket string, key string, body io.Reader) error {
 	f.log.Infof("PutObject  [%s/%s]", bucket, key)
-	return f.uploader.PutObject(bucket, key, body)
+	err := f.uploader.PutObject(bucket, key, body)
+	if err != nil {
+		f.log.Errorf("put object error: [%v]", err)
+		return err
+	}
+	f.log.Infof("[%s] put success", key)
+	return nil
 }
 
 func (f *ObjectStore) ObjectExists(bucket, key string) (bool, error) {
