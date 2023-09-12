@@ -133,14 +133,14 @@ func (f *ObjectStore) getAccessAndSecret(credentialsFile, profile string) (strin
 		}
 
 		//	从给出的配置文件路径中读取用户名密码
-		f.log.Infof("从给出的配置中读取密钥: [%s] [%s]", credentialsFile, profile)
+		f.log.Infof("read secret from credentialsFile: [%s] profile: [%s]", credentialsFile, profile)
 		access, secret, err := f.readCredentialsFile(credentialsFile, profile)
 		if err != nil {
 			return "", "", err
 		}
 		return access, secret, nil
 	}
-	f.log.Infof("从默认配置中读取密钥: [%s] [%s]", DefaultCredentialsFile, profile)
+	f.log.Infof("read secret from  default credentialsFile: [%s] profile: [%s]", DefaultCredentialsFile, profile)
 	return f.readCredentialsFile(DefaultCredentialsFile, profile)
 }
 
@@ -169,7 +169,7 @@ func (f *ObjectStore) readCredentialsFile(CredentialsFile, profile string) (stri
 }
 
 func (f *ObjectStore) PutObject(bucket string, key string, body io.Reader) error {
-	f.log.Infof("PutObject  [%s/%s]", bucket, key)
+	f.log.WithFields(map[string]interface{}{"key": key, "bucket": bucket}).Infof("put object")
 	err := f.uploader.PutObject(bucket, key, body)
 	if err != nil {
 		f.log.Errorf("put object error: [%v]", err)
@@ -180,27 +180,27 @@ func (f *ObjectStore) PutObject(bucket string, key string, body io.Reader) error
 }
 
 func (f *ObjectStore) ObjectExists(bucket, key string) (bool, error) {
-	f.log.Infof("check object exists  [%s/%s]", bucket, key)
+	f.log.WithFields(map[string]interface{}{"key": key, "bucket": bucket}).Infof("check object exists")
 	return f.uploader.ObjectExists(bucket, key)
 }
 
 func (f *ObjectStore) GetObject(bucket, key string) (io.ReadCloser, error) {
-	f.log.Infof("get object [%s/%s]", bucket, key)
+	f.log.WithFields(map[string]interface{}{"key": key, "bucket": bucket}).Infof("get object")
 	return f.uploader.GetObject(bucket, key)
 }
 
 func (f *ObjectStore) ListCommonPrefixes(bucket, prefix, delimiter string) ([]string, error) {
-	f.log.Infof("ListCommonPrefixes object [%s/%s/%s]", bucket, prefix, delimiter)
+	f.log.WithFields(map[string]interface{}{"prefix": prefix, "bucket": bucket, "delimiter": delimiter}).Infof("list common prefixes")
 	return f.uploader.ListCommonPrefixes(bucket, prefix, delimiter)
 }
 
 func (f *ObjectStore) ListObjects(bucket, prefix string) ([]string, error) {
-	f.log.Infof("list object [%s/%s]", bucket, prefix)
+	f.log.WithFields(map[string]interface{}{"prefix": prefix, "bucket": bucket}).Infof("list objects")
 	return f.uploader.ListObjects(bucket, prefix)
 }
 
 func (f *ObjectStore) DeleteObject(bucket, key string) error {
-	f.log.Infof("delete object [%s/%s]", bucket, key)
+	f.log.WithFields(map[string]interface{}{"key": key, "bucket": bucket}).Infof("delete object")
 	return f.uploader.DeleteObject(bucket, key)
 }
 
@@ -210,6 +210,6 @@ func (f *ObjectStore) CreateSignedURL(bucket, key string, ttl time.Duration) (st
 		"key":    key,
 		"ttl":    ttl,
 	})
-	log.Infof("CreateSignedURL")
+	log.Infof("build signedUrl")
 	return f.uploader.CreateSignedURL(bucket, key, ttl)
 }
