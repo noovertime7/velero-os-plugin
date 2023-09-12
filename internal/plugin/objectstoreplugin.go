@@ -19,9 +19,9 @@ package plugin
 import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/noovertime7/velero-os-plugin/internal/ini"
+	"github.com/noovertime7/velero-os-plugin/internal/plugin/uploader"
 	"github.com/pkg/errors"
-	"github.com/vmware-tanzu/velero-plugin-example/internal/ini"
-	"github.com/vmware-tanzu/velero-plugin-example/internal/plugin/uploader"
 	veleroplugin "github.com/vmware-tanzu/velero/pkg/plugin/framework"
 	"io"
 	"os"

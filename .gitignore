@@ -1,6 +1,6 @@
 _output
 velero-plugin-example
-
+.idea
 .go
 
 _tiltbuild

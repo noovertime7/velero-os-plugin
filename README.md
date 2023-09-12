@@ -91,7 +91,7 @@ To run with the example plugins, do the following:
 2. Copy everything from this project into your new project
 
 ```bash
-$ cp -a $GOPATH/src/github.com/vmware-tanzu/velero-plugin-example/* $GOPATH/src/github.com/someuser/velero-plugins/.
+$ cp -a $GOPATH/src/github.com/noovertime7/velero-os-plugin/* $GOPATH/src/github.com/someuser/velero-plugins/.
 ```
 
 3. Remove the git history
@@ -112,5 +112,5 @@ If you need to pull in additional dependencies to your vendor directory, just ru
 $ make modules
 ```
 
-[1]: https://github.com/vmware-tanzu/velero-plugin-example/workflows/Continuous%20Integration/badge.svg
+[1]: https://github.com/noovertime7/velero-os-plugin/workflows/Continuous%20Integration/badge.svg
 

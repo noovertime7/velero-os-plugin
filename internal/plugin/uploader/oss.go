@@ -95,27 +95,18 @@ func (o *OSSUploader) ListCommonPrefixes(bucketName, prefix, delimiter string) (
 
 	prefixes := make([]string, 0)
 
-	marker := ""
-	for {
-		options := []oss.Option{
-			oss.Prefix(prefix),
-			oss.Marker(marker),
-			oss.Delimiter(delimiter),
-		}
+	options := []oss.Option{
+		oss.Prefix(prefix),
+		oss.Delimiter(delimiter),
+	}
 
-		lsRes, err := bucket.ListObjects(options...)
-		if err != nil {
-			return nil, err
-		}
+	lsRes, err := bucket.ListObjects(options...)
+	if err != nil {
+		return nil, err
+	}
 
-		for _, commonPrefix := range lsRes.CommonPrefixes {
-			prefixes = append(prefixes, commonPrefix)
-		}
-
-		if !lsRes.IsTruncated {
-			break
-		}
-		marker = lsRes.NextMarker
+	for _, commonPrefix := range lsRes.CommonPrefixes {
+		prefixes = append(prefixes, commonPrefix)
 	}
 
 	return prefixes, nil
