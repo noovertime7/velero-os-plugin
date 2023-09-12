@@ -17,7 +17,7 @@
 - velero注册插件
 如果已经安装了velero，注册将变得非常简单，命令如下：
 ```shell
- velero plugin add <Image>:<Version>
+ velero plugin add chenteng/velero-ob-plugin:v1.0.5
 ```
 执行命令后会在velero容器内添加一个初始化容器
 
